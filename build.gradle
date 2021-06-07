@@ -1,0 +1,98 @@
+import org.parchmentmc.lodestone.tasks.*;
+
+plugins {
+    // Apply the Java Gradle plugin development plugin to add support for developing Gradle plugins
+    id 'org.parchmentmc.writtenbooks' version '0.4.0'
+    // Lodestone obviously for metadata management tasks
+    id 'org.parchmentmc.lodestone' version '0.2.1'
+
+    // Publishing
+    id 'maven-publish'
+}
+
+def downloadLauncherMeta = tasks.register('downloadLauncherMeta', DownloadLauncherMetadata) {
+}
+
+def downloadVersionMeta = tasks.register('downloadLatestVersionMeta', DownloadVersionMetadata) {
+    dependsOn downloadLauncherMeta
+
+    it.getMcVersion().set(blackstone_targets_mc_version)
+}
+
+def downloadVersion = tasks.register('downloadLatestVersion', DownloadVersion) {
+    dependsOn downloadVersionMeta
+
+    it.getMcVersion().set(blackstone_targets_mc_version)
+}
+
+def createProGuardMetadata = tasks.register("createProGuardMetadata", ExtractMetadataFromProguardFile) {
+    dependsOn downloadVersion
+
+    it.getMcVersion().set(blackstone_targets_mc_version)
+}
+
+def createJarMetadata = tasks.register("createJarMetadata", ExtractMetadataFromJarFiles) {
+    dependsOn createProGuardMetadata
+
+    it.getMcVersion().set(blackstone_targets_mc_version)
+}
+
+def mergeMetadata = tasks.register("mergeMetadata", MergeMetadata) {
+    dependsOn createJarMetadata
+
+    it.getMcVersion().set(blackstone_targets_mc_version)
+}
+
+def createDist = tasks.register('createDistribution', Zip) {
+    dependsOn mergeMetadata
+
+    archiveFileName = "${blackstone_targets_mc_version}.zip"
+    destinationDirectory = layout.buildDirectory.dir('dist')
+
+    from layout.buildDirectory.file("lodestone/${blackstone_targets_mc_version}/merged.json")
+}
+
+def build = tasks.register('build') {
+    dependsOn createDist
+}
+
+tasks.publish.dependsOn build
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            groupId = 'org.parchmentmc'
+
+            version blackstone_targets_mc_version
+
+            artifact createDist
+
+            pom {
+                name = 'Blackstone'
+                description = 'Metadata from the minecraft jar created for each published MC Version.'
+                url = 'https://github.com/ParchmentMC/Blackstone'
+                properties = [
+                        'minecraft_version': blackstone_targets_mc_version,
+                ]
+                licenses {
+                    license {
+                        name = 'MIT'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'OrionDevelopment'
+                        name = 'Marc Hermans'
+                        email = 'marc.hermans@ldtteam.com'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:git://github.com/parchmentmc/blackstone.git'
+                    developerConnection = 'scm:git:https://github.com/parchmentmc/blackstone.git'
+                    url = 'https://github.com/ParchmentMC/Blackstone'
+                }
+            }
+        }
+    }
+}
