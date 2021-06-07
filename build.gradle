@@ -61,7 +61,7 @@ tasks.publish.dependsOn build
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            groupId = 'org.parchmentmc'
+            groupId = 'org.parchmentmc.data'
 
             version blackstone_targets_mc_version
 
