@@ -4,56 +4,53 @@ plugins {
     // Apply the Java Gradle plugin development plugin to add support for developing Gradle plugins
     id 'org.parchmentmc.writtenbooks' version '0.4.0'
     // Lodestone obviously for metadata management tasks
-    id 'org.parchmentmc.lodestone' version '0.2.1'
+    id 'org.parchmentmc.lodestone' version '0.3.0'
 
     // Publishing
     id 'maven-publish'
 }
 
-def downloadLauncherMeta = tasks.register('downloadLauncherMeta', DownloadLauncherMetadata) {
+lodestone {
+    mcVersion = blackstone_targets_mc_version
 }
 
-def downloadVersionMeta = tasks.register('downloadLatestVersionMeta', DownloadVersionMetadata) {
-    dependsOn downloadLauncherMeta
+def downloadLauncherMeta = tasks.register('downloadLauncherMeta', DownloadLauncherMetadata)
 
-    it.getMcVersion().set(blackstone_targets_mc_version)
+def downloadVersionMeta = tasks.register('downloadVersionMeta', DownloadVersionMetadata) {
+    input = downloadLauncherMeta.flatMap { it.output }
 }
 
-def downloadVersion = tasks.register('downloadLatestVersion', DownloadVersion) {
-    dependsOn downloadVersionMeta
-
-    it.getMcVersion().set(blackstone_targets_mc_version)
+def downloadVersion = tasks.register('downloadVersion', DownloadVersion) {
+    input = downloadVersionMeta.flatMap { it.output }
 }
 
-def createProGuardMetadata = tasks.register("createProGuardMetadata", ExtractMetadataFromProguardFile) {
-    dependsOn downloadVersion
-
-    it.getMcVersion().set(blackstone_targets_mc_version)
+def createProGuardMetadata = tasks.register('createProGuardMetadata', ExtractMetadataFromProguardFile) {
+    input = downloadVersion.flatMap { it.output }.map { it.file('client.txt') }
 }
 
-def createJarMetadata = tasks.register("createJarMetadata", ExtractMetadataFromJarFiles) {
-    dependsOn createProGuardMetadata
-
-    it.getMcVersion().set(blackstone_targets_mc_version)
+def createJarMetadata = tasks.register('createJarMetadata', ExtractMetadataFromJarFiles) {
+    input = downloadVersion.flatMap { it.output }.map { it.file('client.jar') }
+    libraries = downloadVersion.flatMap { it.output }.map { it.dir('libraries') }
 }
 
-def mergeMetadata = tasks.register("mergeMetadata", MergeMetadata) {
-    dependsOn createJarMetadata
-
-    it.getMcVersion().set(blackstone_targets_mc_version)
+def mergeMetadata = tasks.register('mergeMetadata', MergeMetadata) {
+    leftSource = createJarMetadata.flatMap { it.output }
+    rightSource = createProGuardMetadata.flatMap { it.output }
 }
 
-def createDist = tasks.register('createDistribution', Zip) {
-    dependsOn mergeMetadata
-
-    archiveFileName = "${blackstone_targets_mc_version}.zip"
+def createDistribution = tasks.register('createDistribution', Zip) {
+    archiveFileName = lodestone.resolvedMcVersion.map { "${it}.zip" }
     destinationDirectory = layout.buildDirectory.dir('dist')
 
-    from layout.buildDirectory.file("lodestone/${blackstone_targets_mc_version}/merged.json")
+    from mergeMetadata.flatMap { it.output }
+}
+
+def clean = tasks.register('clean', Delete) {
+    delete project.layout.buildDirectory
 }
 
 def build = tasks.register('build') {
-    dependsOn createDist
+    dependsOn createDistribution
 }
 
 tasks.publish.dependsOn build
@@ -63,17 +60,17 @@ publishing {
         mavenJava(MavenPublication) {
             groupId = 'org.parchmentmc.data'
 
-            version blackstone_targets_mc_version
+            afterEvaluate {
+                version lodestone.resolvedMcVersion.get()
+            }
 
-            artifact createDist
+            artifact createDistribution
 
             pom {
                 name = 'Blackstone'
                 description = 'Metadata from the minecraft jar created for each published MC Version.'
                 url = 'https://github.com/ParchmentMC/Blackstone'
-                properties = [
-                        'minecraft_version': blackstone_targets_mc_version,
-                ]
+                properties.put('minecraft_version', lodestone.resolvedMcVersion)
                 licenses {
                     license {
                         name = 'MIT'
