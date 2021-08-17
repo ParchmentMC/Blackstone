@@ -14,6 +14,10 @@ lodestone {
     mcVersion = blackstone_targets_mc_version
 }
 
+afterEvaluate {
+    println "MC Version: ${lodestone.resolvedMcVersion.get()}"
+}
+
 def downloadLauncherMeta = tasks.register('downloadLauncherMeta', DownloadLauncherMetadata)
 
 def downloadVersionMeta = tasks.register('downloadVersionMeta', DownloadVersionMetadata) {
