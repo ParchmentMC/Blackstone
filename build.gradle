@@ -10,6 +10,10 @@ plugins {
     id 'maven-publish'
 }
 
+lodestone {
+    mcVersion = blackstone_targets_mc_version
+}
+
 def downloadLauncherMeta = tasks.register('downloadLauncherMeta', DownloadLauncherMetadata) {
     
 }
@@ -17,31 +21,34 @@ def downloadLauncherMeta = tasks.register('downloadLauncherMeta', DownloadLaunch
 def downloadVersionMeta = tasks.register('downloadLatestVersionMeta', DownloadVersionMetadata) {
     dependsOn downloadLauncherMeta
 
-    it.getMcVersion().set(blackstone_targets_mc_version)
+    it.getInput().set(downloadLauncherMeta.get().getOutput())
 }
 
 def downloadVersion = tasks.register('downloadLatestVersion', DownloadVersion) {
     dependsOn downloadVersionMeta
 
-    it.getMcVersion().set(blackstone_targets_mc_version)
+    it.getInput().set(downloadVersionMeta.get().getOutput())
 }
 
 def createProGuardMetadata = tasks.register("createProGuardMetadata", ExtractMetadataFromProguardFile) {
     dependsOn downloadVersion
 
-    it.getMcVersion().set(blackstone_targets_mc_version)
+    it.getInput().set(downloadVersion.get().getOutput().map({dir -> dir.file("client.txt") }))
 }
 
 def createJarMetadata = tasks.register("createJarMetadata", ExtractMetadataFromJarFiles) {
-    dependsOn createProGuardMetadata
+    dependsOn downloadVersion
 
-    it.getMcVersion().set(blackstone_targets_mc_version)
+    it.getInput().set(downloadVersion.get().getOutput().map({dir -> dir.file("client.jar") }))
+    it.getLibraries().set(downloadVersion.get().getOutput().map({dir -> dir.dir("libraries") }))
 }
 
 def mergeMetadata = tasks.register("mergeMetadata", MergeMetadata) {
     dependsOn createJarMetadata
+    dependsOn createProGuardMetadata
 
-    it.getMcVersion().set(blackstone_targets_mc_version)
+    it.getLeftSource().set(createJarMetadata.get().getOutput())
+    it.getRightSource().set(createProGuardMetadata.get().getOutput())
 }
 
 def createDist = tasks.register('createDistribution', Zip) {
@@ -50,7 +57,7 @@ def createDist = tasks.register('createDistribution', Zip) {
     archiveFileName = "${blackstone_targets_mc_version}.zip"
     destinationDirectory = layout.buildDirectory.dir('dist')
 
-    from layout.buildDirectory.file("lodestone/${blackstone_targets_mc_version}/merged.json")
+    from mergeMetadata.get().getOutput()
 }
 
 def build = tasks.register('build') {

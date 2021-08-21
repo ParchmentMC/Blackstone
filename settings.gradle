@@ -1,5 +1,6 @@
 pluginManagement {
     repositories {
+        mavenLocal()
         maven {
             name 'ParchmentMC'
             url 'https://ldtteam.jfrog.io/artifactory/parchmentmc/'
