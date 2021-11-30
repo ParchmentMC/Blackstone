@@ -4,7 +4,7 @@ plugins {
     // Apply the Java Gradle plugin development plugin to add support for developing Gradle plugins
     id 'org.parchmentmc.writtenbooks' version '0.4.0'
     // Lodestone obviously for metadata management tasks
-    id 'org.parchmentmc.lodestone' version '0.3.1'
+    id 'org.parchmentmc.lodestone' version '0.8.0.1'
 
     // Publishing
     id 'maven-publish'
