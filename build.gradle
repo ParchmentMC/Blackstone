@@ -4,7 +4,7 @@ plugins {
     // Apply the Java Gradle plugin development plugin to add support for developing Gradle plugins
     id 'org.parchmentmc.writtenbooks' version '0.4.0'
     // Lodestone obviously for metadata management tasks
-    id 'org.parchmentmc.lodestone' version '0.8.0.4'
+    id 'org.parchmentmc.lodestone' version '0.9.0'
 
     // Publishing
     id 'maven-publish'
@@ -14,54 +14,43 @@ lodestone {
     mcVersion = blackstone_targets_mc_version
 }
 
-def downloadLauncherMeta = tasks.register('downloadLauncherMeta', DownloadLauncherMetadata) {
-
+afterEvaluate {
+    println "MC Version: ${lodestone.resolvedMcVersion.get()}"
 }
 
-def downloadVersionMeta = tasks.register('downloadLatestVersionMeta', DownloadVersionMetadata) {
-    dependsOn downloadLauncherMeta
+def downloadLauncherMeta = tasks.register('downloadLauncherMeta', DownloadLauncherMetadata)
 
-    it.getInput().set(downloadLauncherMeta.get().getOutput())
+def downloadVersionMeta = tasks.register('downloadVersionMeta', DownloadVersionMetadata) {
+    input = downloadLauncherMeta.flatMap { it.output }
 }
 
-def downloadVersion = tasks.register('downloadLatestVersion', DownloadVersion) {
-    dependsOn downloadVersionMeta
-
-    it.getInput().set(downloadVersionMeta.get().getOutput())
+def downloadVersion = tasks.register('downloadVersion', DownloadVersion) {
+    input = downloadVersionMeta.flatMap { it.output }
 }
 
-def createProGuardMetadata = tasks.register("createProGuardMetadata", ExtractMetadataFromProguardFile) {
-    dependsOn downloadVersion
-
-    it.getInput().set(downloadVersion.get().getOutput().map({dir -> dir.file("client.txt") }))
+def createProGuardMetadata = tasks.register('createProGuardMetadata', ExtractMetadataFromProguardFile) {
+    input = downloadVersion.flatMap { it.output }.map { it.file('client.txt') }
 }
 
-def createJarMetadata = tasks.register("createJarMetadata", ExtractMetadataFromJarFiles) {
-    dependsOn downloadVersion
-
-    it.getInput().set(downloadVersion.get().getOutput().map({dir -> dir.file("client.jar") }))
-    it.getLibraries().set(downloadVersion.get().getOutput().map({dir -> dir.dir("libraries") }))
+def createJarMetadata = tasks.register('createJarMetadata', ExtractMetadataFromJarFiles) {
+    input = downloadVersion.flatMap { it.output }.map { it.file('client.jar') }
+    libraries = downloadVersion.flatMap { it.output }.map { it.dir('libraries') }
 }
 
-def mergeMetadata = tasks.register("mergeMetadata", MergeMetadata) {
-    dependsOn createJarMetadata
-    dependsOn createProGuardMetadata
-
-    it.getLeftSource().set(createJarMetadata.get().getOutput())
-    it.getRightSource().set(createProGuardMetadata.get().getOutput())
+def mergeMetadata = tasks.register('mergeMetadata', MergeMetadata) {
+    leftSource = createJarMetadata.flatMap { it.output }
+    rightSource = createProGuardMetadata.flatMap { it.output }
 }
 
-def createDist = tasks.register('createDistribution', Zip) {
-    dependsOn mergeMetadata
-
-    archiveFileName = "${blackstone_targets_mc_version}.zip"
+def createDistribution = tasks.register('createDistribution', Zip) {
+    archiveFileName = lodestone.resolvedMcVersion.map { "${it}.zip" }
     destinationDirectory = layout.buildDirectory.dir('dist')
 
-    from mergeMetadata.get().getOutput()
+    from mergeMetadata.flatMap { it.output }
 }
 
 def build = tasks.register('build') {
-    dependsOn createDist
+    dependsOn createDistribution
 }
 
 tasks.publish.dependsOn build
@@ -71,17 +60,17 @@ publishing {
         mavenJava(MavenPublication) {
             groupId = 'org.parchmentmc.data'
 
-            version blackstone_targets_mc_version
+            afterEvaluate {
+                version lodestone.resolvedMcVersion.get()
+            }
 
-            artifact createDist
+            artifact createDistribution
 
             pom {
                 name = 'Blackstone'
                 description = 'Metadata from the minecraft jar created for each published MC Version.'
                 url = 'https://github.com/ParchmentMC/Blackstone'
-                properties = [
-                        'minecraft_version': blackstone_targets_mc_version,
-                ]
+                properties.put('minecraft_version', lodestone.resolvedMcVersion)
                 licenses {
                     license {
                         name = 'MIT'
