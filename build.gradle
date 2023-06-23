@@ -49,10 +49,6 @@ def createDistribution = tasks.register('createDistribution', Zip) {
     from mergeMetadata.flatMap { it.output }
 }
 
-def clean = tasks.register('clean', Delete) {
-    delete project.layout.buildDirectory
-}
-
 def build = tasks.register('build') {
     dependsOn createDistribution
 }
