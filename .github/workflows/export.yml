@@ -1,4 +1,5 @@
 name: Export metadata
+run-name: Export metadata for Minecraft ${{ inputs.mcversion }}
 
 on:
   workflow_dispatch:
